@@ -23,6 +23,8 @@ API_PASSPORT_MINILOGIN = '%s/ajax/miniLogin' % API_PASSPORT
 API_PASSPORT_MINILOGIN_MINILOGIN = '%s/minilogin' % API_PASSPORT_MINILOGIN
 API_PASSPORT_MINILOGIN_LOGIN = '%s/login' % API_PASSPORT_MINILOGIN
 
+HEART_DELTA = timedelta(minutes=5, seconds=1)
+
 
 class BiliBiliPassport:
     def __init__(self, username, password, cookies_path='bilibili.passport'):
@@ -118,7 +120,7 @@ class BiliBiliLive:
         upgrade_takes_time = ceil(upgrade_requires / 3000) * 5
         upgrade_takes_time = timedelta(minutes=upgrade_takes_time)
         heart_time = datetime.now()
-        heart_next_time = heart_time + timedelta(minutes=5)
+        heart_next_time = heart_time + HEART_DELTA
 
         user_live_level = '%(user_level)s -> %(user_next_level)s' % data
         user_live_intimacy = '%(user_intimacy)s -> %(user_next_intimacy)s' % data
@@ -150,7 +152,7 @@ def main():
             heart_status = live.send_heart()
             user_info = live.get_user_info()
             live.print_report(user_info, heart_status)
-            sleep((5 * 60) + 1)
+            sleep(HEART_DELTA.total_seconds)
 
     for passport in conf['passports']:
         threading.Thread(target=send_heart, args=(passport, )).start()
