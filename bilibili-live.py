@@ -7,7 +7,7 @@ import threading
 from base64 import b64encode as base64_encode
 from datetime import datetime, timedelta
 from time import sleep
-
+from math import ceil
 import requests
 import rsa
 from requests.utils import cookiejar_from_dict, dict_from_cookiejar
@@ -114,18 +114,23 @@ class BiliBiliLive:
         data = user_info['data']
         upgrade_requires = data['user_next_intimacy'] - data['user_intimacy']
         upgrade_progress = data['user_intimacy'] / data['user_next_intimacy']
-        upgrade_takes_time = timedelta(minutes=(upgrade_requires / 3000) * 5)
+        upgrade_takes_time = ceil(upgrade_requires / 3000) * 5
+        upgrade_takes_time = timedelta(minutes=upgrade_takes_time)
         heart_time = datetime.now()
         heart_next_time = heart_time + timedelta(minutes=5)
+
+        user_live_level = '%(user_level)s -> %(user_next_level)s' % data
+        user_live_intimacy = '%(user_intimacy)s -> %(user_next_intimacy)s' % data
         items = (
             ('Login name', self.passport.username),
             ('User name', data['uname']),
-            ('Live level', data['user_level']),
+            ('User level', user_live_level),
+            ('User level rank', data['user_level_rank']),
+            ('User intimacy', user_live_intimacy),
             ('Upgrade requires', upgrade_requires),
             ('Upgrade takes time', upgrade_takes_time),
             ('Upgrade progress', upgrade_progress),
-            ('Level rank', data['user_level_rank']),
-            ('Heart status', 'Success' if heart_status else heart_status),
+            ('Heart status', heart_status),
             ('Heart time', heart_time.isoformat()),
             ('Heart next time', heart_next_time.isoformat()),
         )
