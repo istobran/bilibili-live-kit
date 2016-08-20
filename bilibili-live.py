@@ -147,10 +147,7 @@ def main():
             sleep(5 * 60)
 
     for passport in conf['passports']:
-        process = threading.Thread(target=send_heart, args=(passport, ))
-        process.daemon = True
-        process.start()
-        process.join()
+        threading.Thread(target=send_heart, args=(passport, )).start()
         sleep(1 * 60)
 
 

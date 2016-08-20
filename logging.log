@@ -1,0 +1,8 @@
+INFO:root:start your username
+INFO:requests.packages.urllib3.connectionpool:Starting new HTTP connection (1): live.bilibili.com
+INFO:root:start your username
+INFO:requests.packages.urllib3.connectionpool:Starting new HTTP connection (1): live.bilibili.com
+INFO:requests.packages.urllib3.connectionpool:Starting new HTTPS connection (1): passport.bilibili.com
+INFO:requests.packages.urllib3.connectionpool:Starting new HTTPS connection (1): passport.bilibili.com
+ERROR:BiliBiliPassport:login faild
+ERROR:BiliBiliPassport:login faild
