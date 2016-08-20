@@ -1,8 +1,14 @@
 {
-  "passport": {
-    "username": "your username",
-    "password": "your password"
-  },
+  "passports": [
+    {
+      "username": "your username",
+      "password": "your password"
+    },
+    {
+      "username": "your username",
+      "password": "your password"
+    }
+  ],
   "logging": {
     "level": 20,
     "filename": "logging.log",
