@@ -150,11 +150,11 @@ def main():
             heart_status = live.send_heart()
             user_info = live.get_user_info()
             live.print_report(user_info, heart_status)
-            sleep(5 * 60)
+            sleep((5 * 60) + 1)
 
     for passport in conf['passports']:
         threading.Thread(target=send_heart, args=(passport, )).start()
-        sleep(1 * 60)
+        sleep(30)
 
 
 if __name__ == '__main__':
