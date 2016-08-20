@@ -1,6 +1,6 @@
 [Unit]
 Description=BiliBili Live Get Experience
-Reuqires=network.target
+Requires=network.target
 After=network.target
 
 [Service]
