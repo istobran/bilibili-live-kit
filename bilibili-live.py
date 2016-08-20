@@ -152,7 +152,7 @@ def main():
             heart_status = live.send_heart()
             user_info = live.get_user_info()
             live.print_report(user_info, heart_status)
-            sleep(HEART_DELTA.total_seconds)
+            sleep(int(HEART_DELTA.total_seconds()))
 
     for passport in conf['passports']:
         threading.Thread(target=send_heart, args=(passport, )).start()
