@@ -25,12 +25,14 @@ API_PASSPORT_MINILOGIN_LOGIN = '%s/login' % API_PASSPORT_MINILOGIN
 
 class BiliBiliPassport:
     def __init__(self, username, password, cookies_path='bilibili.passport'):
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.username = username
         self.session = requests.session()
-        self.__cookies_load(username, cookies_path)
+        self.__cookies_load(cookies_path)
         if self.login(username, password):
-            self.__cookies_save(username, cookies_path)
+            self.__cookies_save(cookies_path)
         else:
-            logging.error('BiliBiliPassport#login faild')
+            self.logger.error('login faild')
             exit()
 
     def __handle_login_password(self, password):
@@ -49,7 +51,7 @@ class BiliBiliPassport:
                 'pwd': self.__handle_login_password(password)
             }
             rasp = self.session.post(API_PASSPORT_MINILOGIN_LOGIN, data=payload)
-            logging.debug('BiliBiliPassport#login rasponse: %s', rasp.json())
+            self.logger.debug('login rasponse: %s', rasp.json())
             return rasp.json()['status']
         return True
 
@@ -57,33 +59,36 @@ class BiliBiliPassport:
         rasp = self.session.get(API_LIVE_GET_USER_INFO)
         return rasp.json()['code'] == 'REPONSE_OK'
 
-    def __cookies_load(self, username, path):
+    def __cookies_load(self, path):
         data = {}
         if os.path.exists(path):
             with open(path, 'r') as fp:
                 data = json.load(fp)
-        if data and username in data:
-            self.session.cookies.update(cookiejar_from_dict(data[username]))
+        if data and self.username in data:
+            self.session.cookies.update(
+                cookiejar_from_dict(data[self.username])
+            )
 
-    def __cookies_save(self, username, path):
+    def __cookies_save(self, path):
         data = {}
         if os.path.exists(path):
             with open(path, 'r') as fp:
                 data = json.load(fp)
         with open(path, 'w') as fp:
-            data[username] = dict_from_cookiejar(self.session.cookies)
+            data[self.username] = dict_from_cookiejar(self.session.cookies)
             json.dump(data, fp)
 
 
 class BiliBiliLive:
     def __init__(self, passport: BiliBiliPassport):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.passport = passport
         self.session = self.passport.session
 
     def send_heart(self):
         headers = {'Referer': API_LIVE_ROOM % self.get_room_id()}
         rasp = self.session.post(API_LIVE_USER_ONLINE_HEART, headers=headers)
-        logging.debug('BiliBiliLive#send_heart rasponse: %s', rasp.json())
+        self.logger.debug('send_heart rasponse: %s', rasp.json())
         payload = rasp.json()
         if payload['code'] != 0:
             return payload['msg']
@@ -98,7 +103,7 @@ class BiliBiliLive:
     def get_user_info(self):
         rasp = self.session.get(API_LIVE_GET_USER_INFO)
         payload = rasp.json()
-        logging.debug('BiliBiliLive#get_user_info rasponse: %s', payload)
+        self.logger.debug('get_user_info rasponse: %s', payload)
         if payload['code'] == 'REPONSE_OK':
             return payload
         return False
@@ -113,6 +118,7 @@ class BiliBiliLive:
         heart_time = datetime.now()
         heart_next_time = heart_time + timedelta(minutes=5)
         items = (
+            ('Login name', self.passport.username),
             ('User name', data['uname']),
             ('Live level', data['user_level']),
             ('Upgrade requires', upgrade_requires),
@@ -124,7 +130,7 @@ class BiliBiliLive:
             ('Heart next time', heart_next_time.isoformat()),
         )
         report = '\n'.join('%20s: %s' % (name, value) for name, value in items)
-        logging.info('\n%s', report)
+        self.logger.info('\n%s', report)
 
 
 def main():
@@ -132,23 +138,19 @@ def main():
     logging.basicConfig(**conf['logging'])
 
     def send_heart(passport):
-        live = BiliBiliLive(BiliBiliPassport(**passport))
-        heart_status = live.send_heart()
-        user_info = live.get_user_info()
-        live.print_report(user_info, heart_status)
-
-    def set_interval(func, seconds):
-        def func_wrapper():
-            set_interval(func, seconds)
-            func()
-
-        timer = threading.Timer(seconds, func_wrapper)
-        timer.start()
-        return timer
+        logging.info('start %(username)s', passport)
+        while True:
+            live = BiliBiliLive(BiliBiliPassport(**passport))
+            heart_status = live.send_heart()
+            user_info = live.get_user_info()
+            live.print_report(user_info, heart_status)
+            sleep(5 * 60)
 
     for passport in conf['passports']:
-        set_interval(lambda: send_heart(passport), 5 * 60)
-        logging.info('start %(username)s', passport)
+        process = threading.Thread(target=send_heart, args=(passport, ))
+        process.daemon = True
+        process.start()
+        process.join()
         sleep(1 * 60)
 
 
