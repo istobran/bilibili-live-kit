@@ -1,0 +1,11 @@
+{
+  "passport": {
+    "username": "your username",
+    "password": "your password",
+  },
+  "logging": {
+    "level": 20,
+    "filename": "logging.log",
+    "filemode": "w"
+  }
+}

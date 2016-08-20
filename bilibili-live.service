@@ -1,0 +1,12 @@
+[Unit]
+Description=BiliBili Live Get Experience
+Reuqires=network.target
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/bilibili-live/
+ExecStart=/opt/bilibili-live/bilibili-live.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
