@@ -1,10 +1,12 @@
+Features:
+1. send heartbeat to gain experience
+2. every day check in
+
 # Install and Using
 ```bash
 # download and install
-wget https://github.com/septs/bilibili-live-get-experience/archive/master.zip -O bilibili-live.zip
-unzip bilibili-live.zip
-sudo mv bilibili-live-get-experience-master /opt/bilibili-live
-sudo ln -s /opt/bilibili-live/bilibili-live.service /etc/systemd/system/bilibili-live.service
+git clone https://github.com/septs/bilibili-live-kit /opt/bilibili-live
+ln -s /opt/bilibili-live/bilibili-live.service /etc/systemd/system/bilibili-live.service
 
 # settings your in username and password
 editor /opt/bilibili-live/configure.json
