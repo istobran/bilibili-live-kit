@@ -15,8 +15,10 @@ from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 
 API_LIVE = 'http://live.bilibili.com'
 API_LIVE_ROOM = '%s/%%s' % API_LIVE
-API_LIVE_GET_USER_INFO = '%s/User/getUserInfo' % API_LIVE
+API_LIVE_USER_GET_USER_INFO = '%s/User/getUserInfo' % API_LIVE
 API_LIVE_USER_ONLINE_HEART = '%s/User/userOnlineHeart' % API_LIVE
+API_LIVE_SIGN_DO_SIGN = '%s/sign/doSign' % API_LIVE
+API_LIVE_SIGN_GET_SIGN_INFO = '%s/sign/GetSignInfo' % API_LIVE
 API_PASSPORT = 'https://passport.bilibili.com'
 API_PASSPORT_GET_RSA_KEY = '%s/login?act=getkey' % API_PASSPORT
 API_PASSPORT_MINILOGIN = '%s/ajax/miniLogin' % API_PASSPORT
@@ -59,7 +61,7 @@ class BiliBiliPassport:
         return True
 
     def check_login(self):
-        rasp = self.session.get(API_LIVE_GET_USER_INFO)
+        rasp = self.session.get(API_LIVE_USER_GET_USER_INFO)
         return rasp.json()['code'] == 'REPONSE_OK'
 
     def __cookies_load(self, path):
@@ -91,11 +93,23 @@ class BiliBiliLive:
     def send_heart(self):
         headers = {'Referer': API_LIVE_ROOM % self.get_room_id()}
         rasp = self.session.post(API_LIVE_USER_ONLINE_HEART, headers=headers)
-        self.logger.debug('send_heart rasponse: %s', rasp.json())
         payload = rasp.json()
+        self.logger.debug('send_heart rasponse: %s', payload)
         if payload['code'] != 0:
             return payload['msg']
         return True
+
+    def send_check_in(self):
+        rasp = self.session.get(API_LIVE_SIGN_DO_SIGN)
+        payload = rasp.json()
+        self.logger.debug('send_check_in rasponse: %s', payload)
+        return payload['code'] == 0
+
+    def has_check_in(self):
+        rasp = self.session.get(API_LIVE_SIGN_GET_SIGN_INFO)
+        payload = rasp.json()
+        self.logger.debug('has_check_in rasponse: %s', payload)
+        return payload['code'] == 0 and payload['data']['status']
 
     def get_room_id(self):
         rasponse = self.session.get(API_LIVE)
@@ -104,7 +118,7 @@ class BiliBiliLive:
             return matches.group(1)
 
     def get_user_info(self):
-        rasp = self.session.get(API_LIVE_GET_USER_INFO)
+        rasp = self.session.get(API_LIVE_USER_GET_USER_INFO)
         payload = rasp.json()
         self.logger.debug('get_user_info rasponse: %s', payload)
         if payload['code'] == 'REPONSE_OK':
@@ -146,16 +160,27 @@ def main():
     logging.basicConfig(**conf['logging'])
 
     def send_heart(passport):
-        logging.info('start %(username)s', passport)
+        logging.info('start %(username)s heart thread', passport)
         while True:
             live = BiliBiliLive(BiliBiliPassport(**passport))
+            if live.has_check_in():
+                live.send_check_in()
             heart_status = live.send_heart()
             user_info = live.get_user_info()
             live.print_report(user_info, heart_status)
-            sleep(int(HEART_DELTA.total_seconds()))
+            sleep(HEART_DELTA.total_seconds())
+
+    def send_check_in(passport):
+        logging.info('start %(username)s check-in thread', passport)
+        while True:
+            live = BiliBiliLive(BiliBiliPassport(**passport))
+            if live.has_check_in():
+                live.send_check_in()
+            sleep(timedelta(days=1).total_seconds())
 
     for passport in conf['passports']:
         threading.Thread(target=send_heart, args=(passport, )).start()
+        threading.Thread(target=send_check_in, args=(passport, )).start()
         sleep(30)
 
 
