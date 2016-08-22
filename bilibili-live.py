@@ -222,6 +222,8 @@ def main():
 
     def send_clear_gift(passport):
         logging.info('start %(username)s clear all gift thread', passport)
+        if not passport.get('options', {}).get('send_clear_gift', True):
+            return
         while True:
             live = BiliBiliLive(BiliBiliPassport(**passport))
             live.clear_all_gift()
