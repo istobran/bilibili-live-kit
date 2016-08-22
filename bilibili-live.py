@@ -5,9 +5,9 @@ import os
 import re
 import threading
 from base64 import b64encode as base64_encode
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from math import ceil
-from time import sleep
+from time import sleep, time
 
 import requests
 import rsa
@@ -15,10 +15,13 @@ from requests.utils import cookiejar_from_dict, dict_from_cookiejar
 
 API_LIVE = 'http://live.bilibili.com'
 API_LIVE_ROOM = '%s/%%s' % API_LIVE
+API_LIVE_GET_ROOM_INFO = '%s/live/getInfo' % API_LIVE
 API_LIVE_USER_GET_USER_INFO = '%s/User/getUserInfo' % API_LIVE
 API_LIVE_USER_ONLINE_HEART = '%s/User/userOnlineHeart' % API_LIVE
 API_LIVE_SIGN_DO_SIGN = '%s/sign/doSign' % API_LIVE
 API_LIVE_SIGN_GET_SIGN_INFO = '%s/sign/GetSignInfo' % API_LIVE
+API_LIVE_GIFT_PLAYER_BAG = '%s/gift/playerBag' % API_LIVE
+API_LIVE_GIFT_BAG_SEND = '%s/giftBag/send' % API_LIVE
 API_PASSPORT = 'https://passport.bilibili.com'
 API_PASSPORT_GET_RSA_KEY = '%s/login?act=getkey' % API_PASSPORT
 API_PASSPORT_MINILOGIN = '%s/ajax/miniLogin' % API_PASSPORT
@@ -91,7 +94,7 @@ class BiliBiliLive:
         self.session = self.passport.session
 
     def send_heart(self):
-        headers = {'Referer': API_LIVE_ROOM % self.get_room_id()}
+        headers = {'Referer': API_LIVE_ROOM % self.get_random_room_id()}
         rasp = self.session.post(API_LIVE_USER_ONLINE_HEART, headers=headers)
         payload = rasp.json()
         self.logger.debug('send_heart rasponse: %s', payload)
@@ -111,7 +114,7 @@ class BiliBiliLive:
         self.logger.debug('has_check_in rasponse: %s', payload)
         return payload['code'] == 0 and payload['data']['status']
 
-    def get_room_id(self):
+    def get_random_room_id(self):
         rasponse = self.session.get(API_LIVE)
         matches = re.search(r'data-room-id="(\d+)"', rasponse.text)
         if matches:
@@ -124,6 +127,45 @@ class BiliBiliLive:
         if payload['code'] == 'REPONSE_OK':
             return payload
         return False
+
+    def get_room_info(self, room_id):
+        if not room_id:
+            return
+        payload = {'roomid': room_id}
+        rasp = self.session.get(API_LIVE_GET_ROOM_INFO, data=payload)
+        payload = rasp.json()
+        if payload['code'] == 0:
+            return payload['data']
+
+    def get_room_id_and_danmu_rnd(self, room_id):
+        rasp = self.session.get(API_LIVE_ROOM % self.get_random_room_id())
+        pattern = r'var ROOMID = (\d+);\n.*var DANMU_RND = (\d+);'
+        matches = re.search(pattern, rasp.text)
+        if matches:
+            return matches.group(1), matches.group(2)
+        return None, None
+
+    def clear_all_gift(self):
+        rasp = self.session.get(API_LIVE_GIFT_PLAYER_BAG)
+        items = rasp.json()['data']
+        if not len(items):
+            return
+        room_id = self.get_random_room_id()
+        room_id, danmu_rnd = self.get_room_id_and_danmu_rnd(room_id)
+        room_info = self.get_room_info(room_id)
+        for item in items:
+            payload = {
+                'giftId': item['gift_id'],
+                'roomid': room_info['ROOMID'],
+                'ruid': room_info['MASTERID'],
+                'num': item['gift_num'],
+                'coinType': 'silver',
+                'Bag_id': 0,
+                'timestamp': int(time()),
+                'rnd': danmu_rnd,
+                'token': self.session.cookies.get('LIVE_LOGIN_DATA')
+            }
+            self.session.post(API_LIVE_GIFT_BAG_SEND, data=payload)
 
     def print_report(self, user_info, heart_status=None):
         if not user_info:
@@ -178,9 +220,17 @@ def main():
                 live.send_check_in()
             sleep(timedelta(days=1).total_seconds())
 
+    def send_clear_gift(passport):
+        logging.info('start %(username)s clear all gift thread', passport)
+        while True:
+            live = BiliBiliLive(BiliBiliPassport(**passport))
+            live.clear_all_gift()
+            sleep(timedelta(hours=1).total_seconds())
+
     for passport in conf['passports']:
         threading.Thread(target=send_heart, args=(passport, )).start()
         threading.Thread(target=send_check_in, args=(passport, )).start()
+        threading.Thread(target=send_clear_gift, args=(passport, )).start()
         sleep(30)
 
 
