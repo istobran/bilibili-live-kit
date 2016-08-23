@@ -173,7 +173,7 @@ class BiliBiliLive:
                 'ruid': room_info['MASTERID'],
                 'num': item['gift_num'],
                 'coinType': 'silver',
-                'Bag_id': 0,
+                'Bag_id': item['id'],
                 'timestamp': int(time()),
                 'rnd': danmu_rnd,
                 'token': self.session.cookies.get('LIVE_LOGIN_DATA')
