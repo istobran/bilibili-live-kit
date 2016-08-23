@@ -112,7 +112,7 @@ class BiliBiliLive:
         rasp = self.session.get(API_LIVE_SIGN_GET_SIGN_INFO)
         payload = rasp.json()
         self.logger.debug('has_check_in rasponse: %s', payload)
-        return payload['code'] == 0 and payload['data']['status']
+        return payload['code'] == 0 and bool(payload['data']['status'])
 
     def get_random_room_id(self):
         rasponse = self.session.get(API_LIVE)
