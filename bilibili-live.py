@@ -220,13 +220,12 @@ class BiliBiliLive:
         heart_time = datetime.now()
         heart_next_time = heart_time + HEART_DELTA
 
-        user_live_level = '%(user_level)s -> %(user_next_level)s' % data
         user_live_intimacy = '%(user_intimacy)s -> %(user_next_intimacy)s' % data
         items = (
             ('Login name', self.passport.username),
             '---------------------------------------',
             ('User name', data['uname']),
-            ('User level', user_live_level),
+            ('User level', '%(user_level)s -> %(user_next_level)s' % data),
             ('User level rank', data['user_level_rank']),
             ('User intimacy', user_live_intimacy),
             '---------------------------------------',
@@ -236,7 +235,6 @@ class BiliBiliLive:
             '---------------------------------------',
             ('Heart status', heart_status),
             ('Heart time', heart_time.isoformat()),
-            ('Heart next time', heart_next_time.isoformat()),
         )
         self.logger.info('\n%s', build_report(items))
 
@@ -252,7 +250,8 @@ def set_logger_level(options):
     }
     formatters = {
         'standard': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+            'format': '[%(asctime)s] [%(threadName)s] [%(levelname)s] ' \
+                      '%(name)s: %(message)s'
         }
     }
     handlers = {
