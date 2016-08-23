@@ -8,9 +8,10 @@ Features:
 ```bash
 # download and install
 git clone https://github.com/septs/bilibili-live-kit /opt/bilibili-live
-ln -s /opt/bilibili-live/bilibili-live.service /etc/systemd/system/bilibili-live.service
+cp /opt/bilibili-live/bilibili-live.service.example /etc/systemd/system/bilibili-live.service
 
 # settings your in username and password
+cp /opt/bilibili-live/configure.json.example /opt/bilibili-live/configure.json
 editor /opt/bilibili-live/configure.json
 
 # enable and start service
