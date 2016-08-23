@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import json
 import logging
+import logging.config
 import os
 import re
-import threading
 from base64 import b64encode as base64_encode
 from datetime import date, datetime, timedelta
 from math import ceil
+from threading import Thread
 from time import sleep, time
 
 import requests
@@ -28,7 +29,20 @@ API_PASSPORT_MINILOGIN = '%s/ajax/miniLogin' % API_PASSPORT
 API_PASSPORT_MINILOGIN_MINILOGIN = '%s/minilogin' % API_PASSPORT_MINILOGIN
 API_PASSPORT_MINILOGIN_LOGIN = '%s/login' % API_PASSPORT_MINILOGIN
 
-HEART_DELTA = timedelta(minutes=5, seconds=1)
+HEART_DELTA = timedelta(minutes=1)
+
+
+def build_report(items):
+    def build():
+        for item in items:
+            if isinstance(item, tuple) and len(item) == 2:
+                yield '%20s: %s' % item
+            elif isinstance(item, str) and '-' in item:
+                yield '-' * 48
+            else:
+                yield item
+
+    return '\n'.join(build())
 
 
 class BiliBiliPassport:
@@ -104,7 +118,6 @@ class BiliBiliLive:
         headers = {'Referer': API_LIVE_ROOM % self.get_room_id()}
         rasp = self.session.post(API_LIVE_USER_ONLINE_HEART, headers=headers)
         payload = rasp.json()
-        self.logger.debug('send_heart rasponse: %s', payload)
         if payload['code'] != 0:
             return payload['msg']
         return True
@@ -112,13 +125,11 @@ class BiliBiliLive:
     def send_check_in(self):
         rasp = self.session.get(API_LIVE_SIGN_DO_SIGN)
         payload = rasp.json()
-        self.logger.debug('send_check_in rasponse: %s', payload)
         return payload['code'] == 0
 
     def has_check_in(self):
         rasp = self.session.get(API_LIVE_SIGN_GET_SIGN_INFO)
         payload = rasp.json()
-        self.logger.debug('has_check_in rasponse: %s', payload)
         return bool(payload['data']['status'])
 
     def get_room_id(self):
@@ -132,7 +143,6 @@ class BiliBiliLive:
     def get_user_info(self):
         rasp = self.session.get(API_LIVE_USER_GET_USER_INFO)
         payload = rasp.json()
-        self.logger.debug('get_user_info rasponse: %s', payload)
         if payload['code'] == 'REPONSE_OK':
             return payload
         return False
@@ -154,7 +164,7 @@ class BiliBiliLive:
             return matches.group(1), matches.group(2)
         return None, None
 
-    def clear_all_gift(self):
+    def get_gift_metainfo(self):
         rasp = self.session.get(API_LIVE_GIFT_PLAYER_BAG)
         items = rasp.json()['data']
         if not len(items):
@@ -164,23 +174,42 @@ class BiliBiliLive:
         room_info = self.get_room_info(room_id)
         if not room_info:
             return
-        self.logger.info('clear_all_gift items: %s', items)
-        self.logger.info('clear_all_gift room_info: %s', room_info)
-        for item in items:
-            payload = {
-                'giftId': item['gift_id'],
-                'roomid': room_info['ROOMID'],
-                'ruid': room_info['MASTERID'],
-                'num': item['gift_num'],
-                'coinType': 'silver',
-                'Bag_id': item['id'],
-                'timestamp': int(time()),
-                'rnd': danmu_rnd,
-                'token': self.session.cookies.get('LIVE_LOGIN_DATA')
-            }
-            self.session.post(API_LIVE_GIFT_BAG_SEND, data=payload)
+        return {
+            'room_info': room_info,
+            'danmu_rnd': danmu_rnd,
+            'gift_items': items
+        }
 
-    def print_report(self, user_info, heart_status=None):
+    def send_gift(gift_info, room_info, danmu_rnd):
+        token = self.session.cookies.get('LIVE_LOGIN_DATA', path='/')
+        payload = dict(
+            room_id=room_info['ROOMID'],
+            master_id=room_info['MASTERID'],
+            giftId=gift_info['gift_id'],
+            num=gift_info['gift_num'],
+            Bag_id=gift_info['id'],
+            coinType='silver',
+            timestamp=int(time()),
+            rnd=danmu_rnd,
+            token=token
+        )
+        rasp = self.session.post(API_LIVE_GIFT_BAG_SEND, data=payload)
+        return rasp.json()['code'] == 0
+
+    def print_gift_report(self, gift_info, room_info):
+        items = (
+            ('Bag ID', gift_info['id']),
+            '---------------------------------------',
+            ('Gift Name', gift_info['gift_name']),
+            ('Gift Price', gift_info['gift_price']),
+            ('Gift Number', gift_info['gift_num']),
+            ('Gift Expireat', gift_info['expireat']),
+            '---------------------------------------',
+            ('Sent Room ID', room_info['ROOMID'])
+        )
+        self.logger.info('\n%s', build_report(items))
+
+    def print_heart_report(self, user_info, heart_status):
         if not user_info:
             return
         data = user_info['data']
@@ -195,49 +224,100 @@ class BiliBiliLive:
         user_live_intimacy = '%(user_intimacy)s -> %(user_next_intimacy)s' % data
         items = (
             ('Login name', self.passport.username),
+            '---------------------------------------',
             ('User name', data['uname']),
             ('User level', user_live_level),
             ('User level rank', data['user_level_rank']),
             ('User intimacy', user_live_intimacy),
+            '---------------------------------------',
             ('Upgrade requires', upgrade_requires),
             ('Upgrade takes time', upgrade_takes_time),
             ('Upgrade progress', upgrade_progress),
+            '---------------------------------------',
             ('Heart status', heart_status),
             ('Heart time', heart_time.isoformat()),
             ('Heart next time', heart_next_time.isoformat()),
         )
-        report = '\n'.join('%20s: %s' % (name, value) for name, value in items)
-        self.logger.info('\n%s', report)
+        self.logger.info('\n%s', build_report(items))
+
+
+def set_logger_level(options):
+    version = 1
+    loggers = {
+        '': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True
+        }
+    }
+    formatters = {
+        'standard': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+        }
+    }
+    handlers = {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+            'level': 'DEBUG',
+            'stream': 'ext://sys.stdout'
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'formatter': 'standard',
+            'level': 'INFO',
+            'filename': options['filename'],
+            'mode': options['filemode']
+        }
+    }
+    logging.config.dictConfig(locals())
+
+
+def send_heart(passport):
+    while True:
+        live = BiliBiliLive(BiliBiliPassport(**passport))
+        heart_status = live.send_heart()
+        user_info = live.get_user_info()
+        if heart_status == True:
+            live.print_heart_report(user_info, heart_status)
+        sleep(HEART_DELTA.total_seconds())
+
+
+def send_gift(passport):
+    while True:
+        live = BiliBiliLive(BiliBiliPassport(**passport))
+        metainfo = live.get_gift_metainfo()
+        if not metainfo:
+            return
+        room_info = metainfo['room_info']
+        danmu_rnd = metainfo['danmu_rnd']
+        for gift_info in metainfo['gift_items']:
+            if self.send_gift(gift_info, room_info, danmu_rnd):
+                live.print_gift_report(gift_info, room_info)
+        sleep(HEART_DELTA.total_seconds())
+
+
+def send_check_in(passport):
+    while True:
+        live = BiliBiliLive(BiliBiliPassport(**passport))
+        if not live.has_check_in():
+            live.send_check_in()
+        sleep(HEART_DELTA.total_seconds())
 
 
 def main():
     conf = json.load(open('configure.json'))
-    logging.basicConfig(**conf['logging'])
-
-    def send_heart(passport):
-        logging.info('start %(username)s heart thread', passport)
-        while True:
-            live = BiliBiliLive(BiliBiliPassport(**passport))
-            if not live.has_check_in():
-                live.send_check_in()
-            heart_status = live.send_heart()
-            user_info = live.get_user_info()
-            live.print_report(user_info, heart_status)
-            sleep(HEART_DELTA.total_seconds())
-
-    def send_clear_gift(passport):
-        logging.info('start %(username)s clear all gift thread', passport)
-        if not passport.get('options', {}).get('send_clear_gift', True):
-            return
-        while True:
-            live = BiliBiliLive(BiliBiliPassport(**passport))
-            live.clear_all_gift()
-            sleep(timedelta(hours=1).total_seconds())
+    set_logger_level(conf['logging'])
 
     for passport in conf['passports']:
-        threading.Thread(target=send_heart, args=(passport, )).start()
-        threading.Thread(target=send_clear_gift, args=(passport, )).start()
-        sleep(30)
+        for handler in (send_heart, send_gift, send_check_in):
+            thread = Thread(
+                target=handler,
+                name='%s ~ %s' % (handler.__name__, passport['username']),
+                kwargs={'passport': passport}
+            )
+            thread.start()
+            sleep(3)
 
 
 if __name__ == '__main__':
