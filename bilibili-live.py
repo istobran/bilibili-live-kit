@@ -222,8 +222,6 @@ class BiliBiliLive:
 
         user_live_intimacy = '%(user_intimacy)s -> %(user_next_intimacy)s' % data
         items = (
-            ('Login name', self.passport.username),
-            '---------------------------------------',
             ('User name', data['uname']),
             ('User level', '%(user_level)s -> %(user_next_level)s' % data),
             ('User level rank', data['user_level_rank']),
