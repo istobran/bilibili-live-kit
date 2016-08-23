@@ -101,7 +101,7 @@ class BiliBiliLive:
         self.session = self.passport.session
 
     def send_heart(self):
-        headers = {'Referer': API_LIVE_ROOM % self.get_random_room_id()}
+        headers = {'Referer': API_LIVE_ROOM % self.get_room_id()}
         rasp = self.session.post(API_LIVE_USER_ONLINE_HEART, headers=headers)
         payload = rasp.json()
         self.logger.debug('send_heart rasponse: %s', payload)
@@ -141,7 +141,7 @@ class BiliBiliLive:
         if not room_id:
             return
         payload = {'roomid': room_id}
-        rasp = self.session.get(API_LIVE_GET_ROOM_INFO, data=payload)
+        rasp = self.session.post(API_LIVE_GET_ROOM_INFO, data=payload)
         payload = rasp.json()
         if payload['code'] == 0:
             return payload['data']
@@ -162,6 +162,10 @@ class BiliBiliLive:
         room_id = self.get_room_id()
         room_id, danmu_rnd = self.get_room_id_and_danmu_rnd(room_id)
         room_info = self.get_room_info(room_id)
+        if not room_info:
+            return
+        self.logger.info('clear_all_gift items: %s', items)
+        self.logger.info('clear_all_gift room_info: %s', room_info)
         for item in items:
             payload = {
                 'giftId': item['gift_id'],
@@ -214,20 +218,12 @@ def main():
         logging.info('start %(username)s heart thread', passport)
         while True:
             live = BiliBiliLive(BiliBiliPassport(**passport))
-            if live.has_check_in():
+            if not live.has_check_in():
                 live.send_check_in()
             heart_status = live.send_heart()
             user_info = live.get_user_info()
             live.print_report(user_info, heart_status)
             sleep(HEART_DELTA.total_seconds())
-
-    def send_check_in(passport):
-        logging.info('start %(username)s check-in thread', passport)
-        while True:
-            live = BiliBiliLive(BiliBiliPassport(**passport))
-            if not live.has_check_in():
-                live.send_check_in()
-            sleep(timedelta(days=1).total_seconds())
 
     def send_clear_gift(passport):
         logging.info('start %(username)s clear all gift thread', passport)
@@ -240,7 +236,6 @@ def main():
 
     for passport in conf['passports']:
         threading.Thread(target=send_heart, args=(passport, )).start()
-        threading.Thread(target=send_check_in, args=(passport, )).start()
         threading.Thread(target=send_clear_gift, args=(passport, )).start()
         sleep(30)
 
