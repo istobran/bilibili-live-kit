@@ -225,7 +225,7 @@ def main():
         logging.info('start %(username)s check-in thread', passport)
         while True:
             live = BiliBiliLive(BiliBiliPassport(**passport))
-            if live.has_check_in():
+            if not live.has_check_in():
                 live.send_check_in()
             sleep(timedelta(days=1).total_seconds())
 
