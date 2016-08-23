@@ -32,10 +32,17 @@ HEART_DELTA = timedelta(minutes=5, seconds=1)
 
 
 class BiliBiliPassport:
-    def __init__(self, username, password, cookies_path='bilibili.passport'):
+    def __init__(
+        self,
+        username,
+        password,
+        room_id=None,
+        cookies_path='bilibili.passport'
+    ):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.username = username
         self.session = requests.session()
+        self.room_id = room_id
         self.__cookies_load(cookies_path)
         if self.login(username, password):
             self.__cookies_save(cookies_path)
@@ -112,9 +119,11 @@ class BiliBiliLive:
         rasp = self.session.get(API_LIVE_SIGN_GET_SIGN_INFO)
         payload = rasp.json()
         self.logger.debug('has_check_in rasponse: %s', payload)
-        return payload['code'] == 0 and bool(payload['data']['status'])
+        return bool(payload['data']['status'])
 
-    def get_random_room_id(self):
+    def get_room_id(self):
+        if self.passport.room_id:
+            return self.passport.room_id
         rasponse = self.session.get(API_LIVE)
         matches = re.search(r'data-room-id="(\d+)"', rasponse.text)
         if matches:
@@ -138,7 +147,7 @@ class BiliBiliLive:
             return payload['data']
 
     def get_room_id_and_danmu_rnd(self, room_id):
-        rasp = self.session.get(API_LIVE_ROOM % self.get_random_room_id())
+        rasp = self.session.get(API_LIVE_ROOM % self.get_room_id())
         pattern = r'var ROOMID = (\d+);\n.*var DANMU_RND = (\d+);'
         matches = re.search(pattern, rasp.text)
         if matches:
@@ -150,7 +159,7 @@ class BiliBiliLive:
         items = rasp.json()['data']
         if not len(items):
             return
-        room_id = self.get_random_room_id()
+        room_id = self.get_room_id()
         room_id, danmu_rnd = self.get_room_id_and_danmu_rnd(room_id)
         room_info = self.get_room_info(room_id)
         for item in items:
